@@ -925,4 +925,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the game
     initAppearance();
     initGame();
+
+    // Expose necessary functions and state to the window for enhanced touch controls
+    window.game2048MoveTiles = moveTiles;
+    window.game2048IsAnimating = isAnimating;
+
+    // Dispatch event to notify that the game is loaded and functions are available
+    document.dispatchEvent(new CustomEvent('game2048Loaded', {
+        detail: {
+            moveTiles: moveTiles,
+            isAnimating: () => isAnimating
+        }
+    }));
 });
