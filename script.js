@@ -892,6 +892,18 @@ document.addEventListener('DOMContentLoaded', () => {
         touchStartY = event.touches[0].clientY;
     });
 
+    // Prevent browser's pull-to-refresh behavior on Firefox mobile
+    document.addEventListener('touchmove', event => {
+        // Check if this is a downward swipe (potential pull-to-refresh)
+        const touch = event.touches[0];
+        const deltaY = touch.clientY - touchStartY;
+
+        // If swiping down, prevent the default behavior (page refresh)
+        if (deltaY > 0) {
+            event.preventDefault();
+        }
+    }, { passive: false }); // passive: false is required to use preventDefault
+
     document.addEventListener('touchend', event => {
         if (isAnimating || !touchStartX || !touchStartY) return;
 
@@ -925,16 +937,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize the game
     initAppearance();
     initGame();
-
-    // Expose necessary functions and state to the window for enhanced touch controls
-    window.game2048MoveTiles = moveTiles;
-    window.game2048IsAnimating = isAnimating;
-
-    // Dispatch event to notify that the game is loaded and functions are available
-    document.dispatchEvent(new CustomEvent('game2048Loaded', {
-        detail: {
-            moveTiles: moveTiles,
-            isAnimating: () => isAnimating
-        }
-    }));
 });

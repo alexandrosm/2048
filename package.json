@@ -1,3 +1,6 @@
 {
-    "type": "module"
+    "type": "module",
+    "name": "2048-game",
+    "version": "1.0.0",
+    "description": "A 2048 puzzle game with PWA support"
 }
