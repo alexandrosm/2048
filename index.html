@@ -10,7 +10,8 @@
     <meta name="description" content="Play the addictive 2048 puzzle game! Join the tiles to get to the 2048 tile!">
     <meta name="theme-color" content="#000000">
     <link rel="stylesheet" href="style.css">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=1.0.1">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 </head>
 
@@ -74,6 +75,7 @@
     </div>
 
     <script src="script.js"></script>
+    <script src="fullscreen.js"></script>
     <script>
         // Register service worker for PWA functionality
         if ('serviceWorker' in navigator) {
