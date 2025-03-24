@@ -892,6 +892,18 @@ document.addEventListener('DOMContentLoaded', () => {
         touchStartY = event.touches[0].clientY;
     });
 
+    // Prevent browser's pull-to-refresh behavior on Firefox mobile
+    document.addEventListener('touchmove', event => {
+        // Check if this is a downward swipe (potential pull-to-refresh)
+        const touch = event.touches[0];
+        const deltaY = touch.clientY - touchStartY;
+
+        // If swiping down, prevent the default behavior (page refresh)
+        if (deltaY > 0) {
+            event.preventDefault();
+        }
+    }, { passive: false }); // passive: false is required to use preventDefault
+
     document.addEventListener('touchend', event => {
         if (isAnimating || !touchStartX || !touchStartY) return;
 
