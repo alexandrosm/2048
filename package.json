@@ -2,5 +2,14 @@
     "type": "module",
     "name": "2048-game",
     "version": "1.0.0",
-    "description": "A 2048 puzzle game with PWA support"
+    "description": "A 2048 puzzle game with PWA support",
+    "scripts": {
+        "build:css": "tailwindcss -i ./src/tailwind.css -o ./style.css",
+        "watch:css": "tailwindcss -i ./src/tailwind.css -o ./style.css --watch"
+    },
+    "devDependencies": {
+        "tailwindcss": "^3.3.3",
+        "autoprefixer": "^10.4.14",
+        "postcss": "^8.4.24"
+    }
 }
