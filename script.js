@@ -1,4 +1,34 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Check for localStorage availability
+    function storageAvailable(type) {
+        let storage;
+        try {
+            storage = window[type];
+            const x = '__storage_test__';
+            storage.setItem(x, x);
+            storage.removeItem(x);
+            return true;
+        } catch (e) {
+            return e instanceof DOMException && (
+                // everything except Firefox
+                e.code === 22 ||
+                // Firefox
+                e.code === 1014 ||
+                // test name field too, because code might not be present
+                // everything except Firefox
+                e.name === 'QuotaExceededError' ||
+                // Firefox
+                e.name === 'NS_ERROR_DOM_QUOTA_REACHED') &&
+                // acknowledge QuotaExceededError only if there's something already stored
+                (storage && storage.length !== 0);
+        }
+    }
+
+    // Verify localStorage is available
+    const localStorageAvailable = storageAvailable('localStorage');
+    if (!localStorageAvailable) {
+        console.warn('localStorage is not available - game state will not persist between sessions');
+    }
     const GRID_SIZE = 4;
     const CELL_SIZE_VAR = '--cell-size';
     const GRID_GAP_VAR = '--grid-gap';
@@ -11,6 +41,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameWon = false;
     let canContinue = false;
     let isAnimating = false; // Track if animations are in progress
+
+    // Game state persistence
+    const GAME_STATE_KEY = 'gameState';
 
     // Theme brightness setting (1.0 = light mode, 0.0 = full dark mode)
     let themeBrightness = parseFloat(localStorage.getItem('themeBrightness') || '1');
@@ -220,6 +253,22 @@ document.addEventListener('DOMContentLoaded', () => {
         'super': '#f9f6f2'
     };
 
+    // Map of tile values to their light mode background colors - for consistent theming
+    const lightModeBackgroundColors = {
+        '2': '#eee4da',
+        '4': '#ede0c8',
+        '8': '#f2b179',
+        '16': '#f59563',
+        '32': '#f67c5f',
+        '64': '#f65e3b',
+        '128': '#edcf72',
+        '256': '#edcc61',
+        '512': '#edc850',
+        '1024': '#edc53f',
+        '2048': '#edc22e',
+        'super': '#3c3a32'
+    };
+
     // Helper function to apply theming to a specific tile
     function applyThemingToTile(tile, brightness) {
         // Get tile value from element
@@ -230,9 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const darkText = darkModeTextColors[tileClass] || '#ffffff';
         const lightText = lightModeTextColors[tileClass] || '#776e65';
 
-        // Background colors are simpler - always black in dark mode, variable in light mode
+        // Get background colors from our defined maps, not from computed style
+        // This ensures newly merged tiles get the same colors as existing ones
         const darkBg = '#000000';
-        const lightBg = getComputedStyle(tile).getPropertyValue('--light-tile-bg').trim() || '#eee4da';
+        const lightBg = lightModeBackgroundColors[tileClass] || '#eee4da';
 
         // Interpolate and apply the colors
         tile.style.backgroundColor = interpolateColor(darkBg, lightBg, brightness);
@@ -319,21 +369,111 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function initGame() {
+    // Save current game state to localStorage
+    function saveStateToStorage() {
+        try {
+            const gameState = {
+                grid: grid,
+                score: score,
+                bestScore: bestScore,
+                gameOver: gameOver,
+                gameWon: gameWon,
+                canContinue: canContinue
+            };
+            localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
+            console.log('Game state saved successfully');
+        } catch (e) {
+            console.error('Error saving game state:', e);
+        }
+    }
+
+    // Load game state from localStorage
+    function loadStateFromStorage() {
+        const savedState = localStorage.getItem(GAME_STATE_KEY);
+        if (savedState) {
+            try {
+                const gameState = JSON.parse(savedState);
+
+                // Validate the grid structure to ensure it's valid
+                if (Array.isArray(gameState.grid) &&
+                    gameState.grid.length === GRID_SIZE &&
+                    gameState.grid.every(row => Array.isArray(row) && row.length === GRID_SIZE)) {
+
+                    grid = gameState.grid;
+                    score = gameState.score || 0;
+                    gameOver = gameState.gameOver || false;
+                    gameWon = gameState.gameWon || false;
+                    canContinue = gameState.canContinue || false;
+
+                    // Always use the highest best score
+                    if (gameState.bestScore > bestScore) {
+                        bestScore = gameState.bestScore;
+                        localStorage.setItem('bestScore', bestScore);
+                    }
+
+                    console.log('Game state loaded successfully');
+                    return true;
+                } else {
+                    console.error('Invalid grid structure in saved state');
+                    return false;
+                }
+            } catch (e) {
+                console.error('Error loading saved game:', e);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    function initGame(loadSaved = true) {
         setupGameBoard();
-        grid = createEmptyGrid();
-        score = 0;
-        gameOver = false;
-        gameWon = false;
-        canContinue = false;
-        isAnimating = false;
-        // Reset game history when starting a new game
-        lastGameState = null;
-        updateScore(0);
         clearTiles();
+
+        // Try to load saved game state first if requested
+        const hasSavedState = loadSaved && loadStateFromStorage();
+
+        if (!hasSavedState) {
+            // If no saved state or explicitly starting new game
+            grid = createEmptyGrid();
+            score = 0;
+            gameOver = false;
+            gameWon = false;
+            canContinue = false;
+
+            // Add initial tiles
+            addRandomTile();
+            addRandomTile();
+        } else {
+            // If we loaded a saved state, we need to recreate all the tiles
+            for (let row = 0; row < GRID_SIZE; row++) {
+                for (let col = 0; col < GRID_SIZE; col++) {
+                    const value = grid[row][col];
+                    if (value !== 0) {
+                        addTile(row, col, value, false);
+                    }
+                }
+            }
+        }
+
+        isAnimating = false;
+        // Reset game history when starting a game
+        lastGameState = null;
+
+        // Force update score display with current values
+        updateScore(0, true);
+
         gameMessage.classList.remove('game-over', 'game-won');
-        addRandomTile();
-        addRandomTile();
+
+        // If the game was in a game over or won state, show the message
+        if (gameOver) {
+            setTimeout(() => {
+                showGameMessage('Game over!', 'game-over');
+            }, 100);
+        } else if (gameWon) {
+            setTimeout(() => {
+                showGameMessage('You win!', 'game-won');
+            }, 100);
+        }
     }
 
     // Save the current game state to history
@@ -403,26 +543,41 @@ document.addEventListener('DOMContentLoaded', () => {
         tileContainer.innerHTML = '';
     }
 
-    function updateScore(addedScore) {
+    function updateScore(addedScore, forceUpdate = false) {
         // Update displayed score
         scoreElement.textContent = score;
         bestScoreElement.textContent = bestScore;
 
         // Show visual score addition animation if points were earned
-        if (addedScore > 0) {
-            const scoreAddition = document.createElement('div');
-            scoreAddition.className = 'score-addition';
-            scoreAddition.textContent = '+' + addedScore;
-            scoreAddition.style.top = '5px';
+        if (addedScore > 0 || forceUpdate) {
+            // Only show animation for actual score additions
+            if (addedScore > 0) {
+                const scoreAddition = document.createElement('div');
+                scoreAddition.className = 'score-addition';
+                scoreAddition.textContent = '+' + addedScore;
+                scoreAddition.style.top = '5px';
 
-            const scoreBox = document.querySelector('.score-box');
-            scoreBox.appendChild(scoreAddition);
+                const scoreBox = document.querySelector('.score-box');
+                scoreBox.appendChild(scoreAddition);
 
-            // Remove the element after animation completes (accelerated)
-            setTimeout(() => {
-                scoreAddition.remove();
-            }, 100);
+                // Remove the element after animation completes (accelerated)
+                setTimeout(() => {
+                    scoreAddition.remove();
+                }, 100);
+            }
+
+            // Save the current state to ensure score is persisted
+            if (forceUpdate) {
+                saveStateToStorage();
+            }
         }
+    }
+
+    // Clear all localStorage data (for debugging and testing)
+    function clearAllGameData() {
+        localStorage.removeItem(GAME_STATE_KEY);
+        localStorage.removeItem('bestScore');
+        console.log('All game data cleared');
     }
 
     function getCssVariable(name) {
@@ -443,16 +598,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function calculateTilePosition(row, col) {
+        // Get dimensions from the grid container for responsive layout
+        const gridCells = document.querySelectorAll('.grid-cell');
+
+        // Get the actual grid gap value from CSS
+        const gridGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--grid-gap'));
+
+        // Get the right cell from the grid to measure its exact position
+        const targetCellIndex = row * GRID_SIZE + col;
+        const targetCell = gridCells[targetCellIndex];
+
+        // Get the cell's dimensions
+        const cellWidth = targetCell.offsetWidth;
+        const cellHeight = targetCell.offsetHeight;
+
+        // Get the cell's position relative to the tile container
+        const cellRect = targetCell.getBoundingClientRect();
+        const tileContainerRect = tileContainer.getBoundingClientRect();
+
+        // Calculate the exact position (no need to subtract gridGap again as it's already accounted for in the cell positioning)
+        const left = cellRect.left - tileContainerRect.left;
+        const top = cellRect.top - tileContainerRect.top;
+
+        return { left, top, cellWidth, cellHeight };
+    }
+
     function addTile(row, col, value, merged = false) {
         const tile = document.createElement('div');
         tile.className = `tile tile-${value} ${merged ? 'tile-merged' : 'tile-new'}`;
         tile.textContent = value;
 
-        // Calculate position based on CSS variables
-        const cellSize = getCssVariable(CELL_SIZE_VAR);
-        const gridGap = getCssVariable(GRID_GAP_VAR);
-        tile.style.left = `${col * (cellSize + gridGap)}px`;
-        tile.style.top = `${row * (cellSize + gridGap)}px`;
+        // Calculate position based on responsive grid
+        const position = calculateTilePosition(row, col);
+        tile.style.left = `${position.left}px`;
+        tile.style.top = `${position.top}px`;
+        tile.style.width = `${position.cellWidth}px`;
+        tile.style.height = `${position.cellHeight}px`;
 
         // Add dataset attributes to track tile properties
         tile.dataset.row = row;
@@ -472,10 +654,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateTilePosition(tile, row, col) {
-        const cellSize = getCssVariable(CELL_SIZE_VAR);
-        const gridGap = getCssVariable(GRID_GAP_VAR);
-        tile.style.left = `${col * (cellSize + gridGap)}px`;
-        tile.style.top = `${row * (cellSize + gridGap)}px`;
+        // Calculate position based on responsive grid
+        const position = calculateTilePosition(row, col);
+        tile.style.left = `${position.left}px`;
+        tile.style.top = `${position.top}px`;
+        tile.style.width = `${position.cellWidth}px`;
+        tile.style.height = `${position.cellHeight}px`;
 
         // Update dataset attributes
         tile.dataset.row = row;
@@ -713,6 +897,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset animation state after animations finish
             setTimeout(() => {
                 isAnimating = false;
+
+                // Save the game state to localStorage after animations complete
+                saveStateToStorage();
             }, ANIMATION_DURATION);
 
             return true;
@@ -851,8 +1038,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Event listeners
-    restartButton.addEventListener('click', initGame);
-    retryButton.addEventListener('click', initGame);
+    restartButton.addEventListener('click', () => {
+        // Clear saved state when explicitly restarting
+        clearAllGameData();
+        initGame(false);  // Start new game, don't load saved state
+    });
+    retryButton.addEventListener('click', () => {
+        // Clear saved state when retrying after game over
+        clearAllGameData();
+        initGame(false);  // Start new game, don't load saved state
+    });
     undoButton.addEventListener('click', undoMove);
 
     // Initially disable undo button until a move is made

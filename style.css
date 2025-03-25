@@ -46,13 +46,12 @@
     --win-message-bg-color: var(--light-win-message-bg-color);
 }
 
-/* Responsive variables */
-@media (max-width: 520px) {
-    :root {
-        --cell-size: 65px;
-        --grid-gap: 10px;
-        --tile-font-size: 25px;
-    }
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
 }
 
 body {
@@ -61,13 +60,18 @@ body {
     color: var(--text-color);
     display: flex;
     justify-content: center;
-    padding: 20px;
+    align-items: center;
+    padding: 10px;
     transition: background-color 0.3s, color 0.3s;
+    min-height: 100vh;
 }
 
 .container {
     width: 100%;
-    max-width: 500px;
+    max-width: 95vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* Header with logo and scores */
@@ -76,10 +80,11 @@ header {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    width: 100%;
 }
 
 h1 {
-    font-size: 80px;
+    font-size: clamp(40px, 10vw, 80px);
     font-weight: bold;
     margin: 0;
     color: var(--text-color);
@@ -119,6 +124,8 @@ h1 {
 /* Game instructions */
 .game-intro {
     margin-bottom: 20px;
+    width: 100%;
+    text-align: center;
 }
 
 .game-intro p {
@@ -153,9 +160,9 @@ button:active {
 .game-container {
     position: relative;
     margin-bottom: 15px;
-    width: fit-content;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
 /* Game controls styling */
@@ -164,6 +171,7 @@ button:active {
     justify-content: center;
     gap: 20px;
     margin-bottom: 30px;
+    width: 100%;
 }
 
 .icon-button {
@@ -278,20 +286,23 @@ button:active {
     background-color: var(--grid-bg-color);
     padding: var(--grid-gap);
     border-radius: var(--border-radius);
-    display: grid;
-    grid-template-columns: repeat(var(--grid-size), var(--cell-size));
-    grid-template-rows: repeat(var(--grid-size), var(--cell-size));
-    gap: var(--grid-gap);
     z-index: 1;
     transition: background-color 0.3s;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    max-width: min(90vw, 85vh);
+    display: grid;
+    grid-template-columns: repeat(var(--grid-size), 1fr);
+    grid-template-rows: repeat(var(--grid-size), 1fr);
+    gap: var(--grid-gap);
 }
 
 .grid-cell {
-    width: var(--cell-size);
-    height: var(--cell-size);
     background-color: var(--cell-bg-color);
     border-radius: 3px;
     transition: background-color 0.3s;
+    width: 100%;
+    aspect-ratio: 1 / 1;
 }
 
 /* Tile container and tiles */
@@ -300,24 +311,21 @@ button:active {
     top: var(--grid-gap);
     left: var(--grid-gap);
     z-index: 2;
-    /* Size matches the grid content area exactly */
-    width: calc(var(--cell-size) * var(--grid-size) + var(--grid-gap) * (var(--grid-size) - 1));
-    height: calc(var(--cell-size) * var(--grid-size) + var(--grid-gap) * (var(--grid-size) - 1));
-    /* Debug outline */
-    /*border: 1px solid red;*/
+    width: calc(100% - 2 * var(--grid-gap));
+    height: calc(100% - 2 * var(--grid-gap));
 }
 
 .tile {
     position: absolute;
-    width: var(--cell-size);
-    height: var(--cell-size);
+    width: calc((100% - (var(--grid-size) - 1) * var(--grid-gap)) / var(--grid-size));
+    height: calc((100% - (var(--grid-size) - 1) * var(--grid-gap)) / var(--grid-size));
     border-radius: 3px;
     font-weight: bold;
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 10;
-    font-size: var(--tile-font-size);
+    font-size: clamp(16px, 5vw, 35px);
     /* Enhanced transition for faster movement */
     transition: transform 0.1s, left 0.1s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.1s cubic-bezier(0.25, 0.1, 0.25, 1);
     /* Add a subtle shadow for depth */
@@ -382,7 +390,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #edcf72;
-    font-size: calc(var(--tile-font-size) * 0.85);
+    font-size: clamp(14px, 4.25vw, 30px);
 }
 
 .tile-256 {
@@ -390,7 +398,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #edcc61;
-    font-size: calc(var(--tile-font-size) * 0.85);
+    font-size: clamp(14px, 4.25vw, 30px);
 }
 
 .tile-512 {
@@ -398,7 +406,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #edc850;
-    font-size: calc(var(--tile-font-size) * 0.85);
+    font-size: clamp(14px, 4.25vw, 30px);
 }
 
 .tile-1024 {
@@ -406,7 +414,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #edc53f;
-    font-size: calc(var(--tile-font-size) * 0.7);
+    font-size: clamp(12px, 3.5vw, 25px);
 }
 
 .tile-2048 {
@@ -414,7 +422,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #edc22e;
-    font-size: calc(var(--tile-font-size) * 0.7);
+    font-size: clamp(12px, 3.5vw, 25px);
 }
 
 .tile-super {
@@ -422,7 +430,7 @@ button:active {
     --light-tile-text: #f9f6f2;
     --dark-tile-bg: #000000;
     --dark-tile-text: #9d9c94;
-    font-size: calc(var(--tile-font-size) * 0.6);
+    font-size: clamp(10px, 3vw, 21px);
 }
 
 /* Game state messages */
@@ -457,7 +465,7 @@ button:active {
 }
 
 .game-message p {
-    font-size: 60px;
+    font-size: clamp(30px, 8vw, 60px);
     font-weight: bold;
     margin-bottom: 20px;
 }
@@ -476,11 +484,6 @@ button:active {
         opacity: 1;
     }
 }
-
-/* Remove duplicate transition - already defined in .tile */
-/* .tile {
-    transition: left 0.15s ease-in-out, top 0.15s ease-in-out;
-} */
 
 .tile-new {
     animation: appear 0.1s ease-out;
@@ -559,7 +562,17 @@ button:active {
         font-size: 50px;
     }
 
-    .game-message p {
-        font-size: 40px;
+    .score-box {
+        padding: 10px 15px;
+        min-width: 80px;
+    }
+
+    #score,
+    #best-score {
+        font-size: 20px;
+    }
+
+    .score-title {
+        font-size: 11px;
     }
 }
