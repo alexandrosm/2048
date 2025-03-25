@@ -547,13 +547,26 @@ button:active {
 .score-addition {
     position: absolute;
     right: 30px;
-    color: #776e65;
-    font-size: 20px;
+    color: rgba(119, 110, 101, 0.9);
+    font-size: 25px;
+    line-height: 25px;
     font-weight: bold;
-    opacity: 0;
-    animation: score-pop 0.1s ease-in-out;
-    animation-fill-mode: both;
     z-index: 100;
+    animation: moveUp 0.6s ease-in;
+    animation-fill-mode: both;
+}
+
+.penalty-message {
+    position: absolute;
+    color: #e74c3c;
+    font-size: 20px;
+    line-height: 25px;
+    font-weight: bold;
+    z-index: 100;
+    text-align: center;
+    animation: moveUp 0.6s ease-in;
+    animation-fill-mode: both;
+    pointer-events: none;
 }
 
 /* Responsive adjustments */
