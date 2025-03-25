@@ -51,6 +51,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Game history for undo functionality - limited to a single move
     let lastGameState = null; // Store only the previous state
 
+    // Undo penalty tracking
+    let undoCount = 0;
+    const UNDO_PENALTY_BASE = 10;
+    const UNDO_PENALTY_MULTIPLIER = 1.33;
+
     const gridContainer = document.querySelector('.grid-container');
     const tileContainer = document.querySelector('.tile-container');
     const scoreElement = document.getElementById('score');
@@ -379,7 +384,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 gameOver: gameOver,
                 gameWon: gameWon,
                 canContinue: canContinue,
-                lastGameState: lastGameState // Save previous state for undo functionality
+                lastGameState: lastGameState, // Save previous state for undo functionality
+                undoCount: undoCount // Save the undo count for increasing penalties
             };
             localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
             console.log('Game state saved successfully');
@@ -409,6 +415,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Load previous state for undo functionality
                     if (gameState.lastGameState) {
                         lastGameState = gameState.lastGameState;
+                    }
+
+                    // Load undo count if available
+                    if (gameState.undoCount !== undefined) {
+                        undoCount = gameState.undoCount;
                     }
 
                     // Always use the highest best score
@@ -445,6 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameOver = false;
             gameWon = false;
             canContinue = false;
+            undoCount = 0; // Reset undo count for new games
 
             // Add initial tiles
             addRandomTile();
@@ -506,6 +518,44 @@ document.addEventListener('DOMContentLoaded', () => {
         undoButton.disabled = false;
     }
 
+    function calculateUndoPenalty() {
+        // Calculate penalty: basePenalty * (multiplier ^ undoCount)
+        return Math.floor(UNDO_PENALTY_BASE * (Math.pow(UNDO_PENALTY_MULTIPLIER, undoCount)));
+    }
+
+    function showPenaltyMessage(penalty) {
+        // Create a floating penalty message
+        const penaltyMessage = document.createElement('div');
+        penaltyMessage.className = 'penalty-message';
+        penaltyMessage.textContent = `-${penalty}`;
+
+        // Position it near the undo button
+        const undoButtonRect = undoButton.getBoundingClientRect();
+        const gameContainerRect = document.querySelector('.game-container').getBoundingClientRect();
+
+        penaltyMessage.style.position = 'absolute';
+        penaltyMessage.style.left = `${undoButtonRect.left - gameContainerRect.left + undoButtonRect.width / 2}px`;
+        penaltyMessage.style.top = `${undoButtonRect.top - gameContainerRect.top - 20}px`;
+        penaltyMessage.style.color = '#e74c3c';
+        penaltyMessage.style.fontWeight = 'bold';
+        penaltyMessage.style.fontSize = '1.2em';
+        penaltyMessage.style.opacity = '1';
+        penaltyMessage.style.transform = 'translateY(0)';
+        penaltyMessage.style.transition = 'opacity 0.5s, transform 0.5s';
+        penaltyMessage.style.zIndex = '30';
+
+        document.querySelector('.game-container').appendChild(penaltyMessage);
+
+        // Animate and remove it
+        setTimeout(() => {
+            penaltyMessage.style.opacity = '0';
+            penaltyMessage.style.transform = 'translateY(-30px)';
+            setTimeout(() => {
+                penaltyMessage.remove();
+            }, 500);
+        }, 800);
+    }
+
     // Restore the previous game state
     function undoMove() {
         // If no history or animating, do nothing
@@ -513,17 +563,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         isAnimating = true;
 
-        // Restore grid and score
+        // Increment undo count for increasing penalties
+        undoCount++;
+
+        // Calculate penalty based on exponential formula
+        const penalty = calculateUndoPenalty();
+
+        // Restore grid and previous game state
         grid = lastGameState.grid;
-        score = lastGameState.score;
+        const previousScore = lastGameState.score;
         gameOver = lastGameState.gameOver;
         gameWon = lastGameState.gameWon;
+
+        // Apply the penalty to the score, but ensure it doesn't go below 0
+        score = Math.max(0, previousScore - penalty);
 
         // Clear the history after using it
         lastGameState = null;
 
+        // Show penalty message
+        showPenaltyMessage(penalty);
+
         // Update score display
-        updateScore(0);
+        updateScore(0, true);
 
         // Redraw the grid
         renderGrid(grid);
@@ -545,6 +607,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset animation state after animations finish
         setTimeout(() => {
             isAnimating = false;
+
+            // Save game state after undo (with penalty applied)
+            saveStateToStorage();
         }, ANIMATION_DURATION);
     }
 
