@@ -125,8 +125,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update slider UI
         themeSlider.value = brightness;
 
-        // Save to localStorage
-        localStorage.setItem('themeBrightness', brightness);
+        // Save theme using the storage manager
+        storageManager.saveTheme(brightness);
 
         // Interpolate and apply all theme colors
         const root = document.documentElement;
@@ -360,6 +360,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         themeSlider.addEventListener('input', () => {
             themeBrightness = parseFloat(themeSlider.value);
             applyTheme(themeBrightness);
+        });
+
+        // Also save theme when slider is released (end of adjustment)
+        themeSlider.addEventListener('change', () => {
+            storageManager.saveTheme(themeBrightness);
         });
     }
 
@@ -950,7 +955,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             score += scoreAdd;
             if (score > bestScore) {
                 bestScore = score;
-                localStorage.setItem('bestScore', bestScore);
+                storageManager.saveBestScore(bestScore);
             }
 
             // Update score with animation
