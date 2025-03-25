@@ -1,61 +1,36 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Check for localStorage availability
-    function storageAvailable(type) {
-        let storage;
-        try {
-            storage = window[type];
-            const x = '__storage_test__';
-            storage.setItem(x, x);
-            storage.removeItem(x);
-            return true;
-        } catch (e) {
-            return e instanceof DOMException && (
-                // everything except Firefox
-                e.code === 22 ||
-                // Firefox
-                e.code === 1014 ||
-                // test name field too, because code might not be present
-                // everything except Firefox
-                e.name === 'QuotaExceededError' ||
-                // Firefox
-                e.name === 'NS_ERROR_DOM_QUOTA_REACHED') &&
-                // acknowledge QuotaExceededError only if there's something already stored
-                (storage && storage.length !== 0);
-        }
-    }
+/**
+ * 2048 Game - Main Module
+ * Refactored to use modular architecture and ES modules
+ */
 
-    // Verify localStorage is available
-    const localStorageAvailable = storageAvailable('localStorage');
-    if (!localStorageAvailable) {
-        console.warn('localStorage is not available - game state will not persist between sessions');
-    }
+import InputManager from './input-manager.js';
+import StorageManager from './storage-manager.js';
+
+// Initialize the game once the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    // Game constants
     const GRID_SIZE = 4;
     const CELL_SIZE_VAR = '--cell-size';
     const GRID_GAP_VAR = '--grid-gap';
     const ANIMATION_DURATION = 100; // Accelerated animations (was 250ms)
 
+    // Game state variables
     let grid = [];
     let score = 0;
-    let bestScore = localStorage.getItem('bestScore') || 0;
+    let bestScore = 0;
     let gameOver = false;
     let gameWon = false;
     let canContinue = false;
     let isAnimating = false; // Track if animations are in progress
-
-    // Game state persistence
-    const GAME_STATE_KEY = 'gameState';
-
-    // Theme brightness setting (1.0 = light mode, 0.0 = full dark mode)
-    let themeBrightness = parseFloat(localStorage.getItem('themeBrightness') || '1');
-
-    // Game history for undo functionality - limited to a single move
-    let lastGameState = null; // Store only the previous state
-
-    // Undo penalty tracking
+    let lastGameState = null; // Store only the previous state for undo
     let undoCount = 0;
-    const UNDO_PENALTY_BASE = 10;
-    const UNDO_PENALTY_MULTIPLIER = 1.33;
+    let themeBrightness = 1; // Default brightness
 
+    // Default settings - will be overridden by loaded settings
+    let UNDO_PENALTY_BASE = 10;
+    let UNDO_PENALTY_MULTIPLIER = 1.33;
+
+    // Get DOM elements
     const gridContainer = document.querySelector('.grid-container');
     const tileContainer = document.querySelector('.tile-container');
     const scoreElement = document.getElementById('score');
@@ -65,9 +40,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const retryButton = document.getElementById('retry-button');
     const restartButton = document.getElementById('restart-button');
     const undoButton = document.getElementById('undo-button');
-
-    // UI control for theme
     const themeSlider = document.getElementById('theme-slider');
+
+    // Initialize managers
+    const inputManager = new InputManager({
+        gameContainer: document.querySelector('.game-container')
+    });
+
+    const storageManager = new StorageManager({
+        namespace: '2048-game'
+    });
+
+    // Load saved data
+    try {
+        // Load theme
+        themeBrightness = await storageManager.loadTheme();
+
+        // Load best score
+        bestScore = await storageManager.loadBestScore();
+
+        // Load settings
+        const settings = await storageManager.loadSettings();
+        UNDO_PENALTY_BASE = settings.undoPenaltyBase || UNDO_PENALTY_BASE;
+        UNDO_PENALTY_MULTIPLIER = settings.undoPenaltyMultiplier || UNDO_PENALTY_MULTIPLIER;
+
+        console.log('Game data loaded successfully');
+    } catch (error) {
+        console.error('Error loading game data:', error);
+    }
 
     // Function to interpolate between two colors based on theme brightness
     function interpolateColor(darkColor, lightColor, factor) {
@@ -374,34 +374,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Save current game state to localStorage
-    function saveStateToStorage() {
+    // Save current game state
+    async function saveGameState() {
         try {
             const gameState = {
                 grid: grid,
                 score: score,
-                bestScore: bestScore,
                 gameOver: gameOver,
                 gameWon: gameWon,
                 canContinue: canContinue,
-                lastGameState: lastGameState, // Save previous state for undo functionality
-                undoCount: undoCount // Save the undo count for increasing penalties
+                lastGameState: lastGameState,
+                undoCount: undoCount
             };
-            localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
-            console.log('Game state saved successfully');
-        } catch (e) {
-            console.error('Error saving game state:', e);
+
+            await storageManager.saveGameState(gameState);
+
+            // Also update best score if needed
+            if (score > bestScore) {
+                bestScore = score;
+                await storageManager.saveBestScore(bestScore);
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error saving game state:', error);
+            return false;
         }
     }
 
-    // Load game state from localStorage
-    function loadStateFromStorage() {
-        const savedState = localStorage.getItem(GAME_STATE_KEY);
-        if (savedState) {
-            try {
-                const gameState = JSON.parse(savedState);
+    // Load game state
+    async function loadGameState() {
+        try {
+            const gameState = await storageManager.loadGameState();
 
-                // Validate the grid structure to ensure it's valid
+            if (gameState) {
+                // Validate the grid structure
                 if (Array.isArray(gameState.grid) &&
                     gameState.grid.length === GRID_SIZE &&
                     gameState.grid.every(row => Array.isArray(row) && row.length === GRID_SIZE)) {
@@ -422,32 +429,26 @@ document.addEventListener('DOMContentLoaded', () => {
                         undoCount = gameState.undoCount;
                     }
 
-                    // Always use the highest best score
-                    if (gameState.bestScore > bestScore) {
-                        bestScore = gameState.bestScore;
-                        localStorage.setItem('bestScore', bestScore);
-                    }
-
-                    console.log('Game state loaded successfully');
                     return true;
                 } else {
                     console.error('Invalid grid structure in saved state');
                     return false;
                 }
-            } catch (e) {
-                console.error('Error loading saved game:', e);
-                return false;
             }
+            return false;
+        } catch (error) {
+            console.error('Error loading game state:', error);
+            return false;
         }
-        return false;
     }
 
-    function initGame(loadSaved = true) {
+    // Initialize or reset the game
+    async function initGame(loadSaved = true) {
         setupGameBoard();
         clearTiles();
 
         // Try to load saved game state first if requested
-        const hasSavedState = loadSaved && loadStateFromStorage();
+        const hasSavedState = loadSaved && await loadGameState();
 
         if (!hasSavedState) {
             // If no saved state or explicitly starting new game
@@ -501,8 +502,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Save the current game state to history
-    function saveGameState() {
+    // Save the current game state for undo functionality
+    function saveGameStateForUndo() {
         // Create a deep copy of the current grid
         const gridCopy = grid.map(row => [...row]);
 
@@ -609,7 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isAnimating = false;
 
             // Save game state after undo (with penalty applied)
-            saveStateToStorage();
+            saveGameState();
         }, ANIMATION_DURATION);
     }
 
@@ -646,16 +647,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Save the current state to ensure score is persisted
             if (forceUpdate) {
-                saveStateToStorage();
+                saveGameState();
             }
         }
     }
 
-    // Clear all localStorage data (for debugging and testing)
-    function clearAllGameData() {
-        localStorage.removeItem(GAME_STATE_KEY);
-        localStorage.removeItem('bestScore');
-        console.log('All game data cleared');
+    // Clear all game data
+    async function clearAllGameData() {
+        try {
+            await storageManager.clearAllData();
+            return true;
+        } catch (error) {
+            console.error('Error clearing game data:', error);
+            return false;
+        }
     }
 
     function getCssVariable(name) {
@@ -899,7 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isAnimating || (gameOver && !canContinue)) return false;
 
         // Save current state before making the move
-        saveGameState();
+        saveGameStateForUndo();
 
         // Store the direction for use in rendering
         lastMoveDirection = direction;
@@ -976,8 +981,8 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 isAnimating = false;
 
-                // Save the game state to localStorage after animations complete
-                saveStateToStorage();
+                // Save the game state after animations complete
+                saveGameState();
             }, ANIMATION_DURATION);
 
             return true;
@@ -1115,99 +1120,54 @@ document.addEventListener('DOMContentLoaded', () => {
         }, ANIMATION_DURATION);
     }
 
-    // Event listeners
-    restartButton.addEventListener('click', () => {
-        // Clear saved state when explicitly restarting
-        clearAllGameData();
-        initGame(false);  // Start new game, don't load saved state
-    });
-    retryButton.addEventListener('click', () => {
-        // Clear saved state when retrying after game over
-        clearAllGameData();
-        initGame(false);  // Start new game, don't load saved state
-    });
-    undoButton.addEventListener('click', undoMove);
+    // Set up event handlers
+    function setupEventHandlers() {
+        // Direct button click handlers
+        restartButton.addEventListener('click', () => {
+            // Clear saved state when explicitly restarting
+            clearAllGameData();
+            initGame(false);  // Start new game, don't load saved state
+        });
 
-    // Initially disable undo button until a move is made
-    undoButton.disabled = true;
+        retryButton.addEventListener('click', () => {
+            // Clear saved state when retrying after game over
+            clearAllGameData();
+            initGame(false);  // Start new game, don't load saved state
+        });
 
-    // Listen for both keydown events and button clicks
-    document.addEventListener('keydown', event => {
-        // Support for arrow keys and WASD keys
-        const keyMap = {
-            'ArrowUp': 'up',
-            'ArrowRight': 'right',
-            'ArrowDown': 'down',
-            'ArrowLeft': 'left',
-            'w': 'up',
-            'd': 'right',
-            's': 'down',
-            'a': 'left',
-            'W': 'up',
-            'D': 'right',
-            'S': 'down',
-            'A': 'left'
-        };
+        undoButton.addEventListener('click', undoMove);
 
-        if (keyMap[event.key]) {
-            event.preventDefault();
-            moveTiles(keyMap[event.key]);
-        }
-    });
+        // Initially disable undo button until a move is made
+        undoButton.disabled = true;
 
-    // Add touch controls for mobile devices
-    let touchStartX = 0;
-    let touchStartY = 0;
+        // Input Manager event handlers
+        inputManager.on('move', (direction) => {
+            moveTiles(direction);
+        });
 
-    document.addEventListener('touchstart', event => {
-        if (isAnimating) return;
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-    });
+        inputManager.on('restart', () => {
+            clearAllGameData();
+            initGame(false);
+        });
 
-    // Prevent browser's pull-to-refresh behavior on Firefox mobile
-    document.addEventListener('touchmove', event => {
-        // Check if this is a downward swipe (potential pull-to-refresh)
-        const touch = event.touches[0];
-        const deltaY = touch.clientY - touchStartY;
+        inputManager.on('undo', () => {
+            undoMove();
+        });
 
-        // If swiping down, prevent the default behavior (page refresh)
-        if (deltaY > 0) {
-            event.preventDefault();
-        }
-    }, { passive: false }); // passive: false is required to use preventDefault
+        // Optional: add menu handler if implemented
+        inputManager.on('menu', () => {
+            console.log('Menu requested - not yet implemented');
+            // Future implementation: show game menu
+        });
+    }
 
-    document.addEventListener('touchend', event => {
-        if (isAnimating || !touchStartX || !touchStartY) return;
+    // Main initialization
+    function startGame() {
+        setupEventHandlers();
+        initAppearance();
+        initGame();
+    }
 
-        const touchEndX = event.changedTouches[0].clientX;
-        const touchEndY = event.changedTouches[0].clientY;
-
-        const deltaX = touchEndX - touchStartX;
-        const deltaY = touchEndY - touchStartY;
-
-        // Determine the direction of the swipe
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-            // Horizontal swipe
-            if (deltaX > 20) {
-                moveTiles('right');
-            } else if (deltaX < -20) {
-                moveTiles('left');
-            }
-        } else {
-            // Vertical swipe
-            if (deltaY > 20) {
-                moveTiles('down');
-            } else if (deltaY < -20) {
-                moveTiles('up');
-            }
-        }
-
-        touchStartX = 0;
-        touchStartY = 0;
-    });
-
-    // Initialize the game
-    initAppearance();
-    initGame();
+    // Start the game
+    startGame();
 });
