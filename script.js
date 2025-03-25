@@ -378,7 +378,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 bestScore: bestScore,
                 gameOver: gameOver,
                 gameWon: gameWon,
-                canContinue: canContinue
+                canContinue: canContinue,
+                lastGameState: lastGameState // Save previous state for undo functionality
             };
             localStorage.setItem(GAME_STATE_KEY, JSON.stringify(gameState));
             console.log('Game state saved successfully');
@@ -404,6 +405,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     gameOver = gameState.gameOver || false;
                     gameWon = gameState.gameWon || false;
                     canContinue = gameState.canContinue || false;
+
+                    // Load previous state for undo functionality
+                    if (gameState.lastGameState) {
+                        lastGameState = gameState.lastGameState;
+                    }
 
                     // Always use the highest best score
                     if (gameState.bestScore > bestScore) {
@@ -456,8 +462,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         isAnimating = false;
-        // Reset game history when starting a game
-        lastGameState = null;
+
+        // Don't reset lastGameState when loading a saved game
+        // Only reset it for new games
+        if (!loadSaved) {
+            lastGameState = null;
+        }
+
+        // Update undo button state based on lastGameState
+        undoButton.disabled = !lastGameState;
 
         // Force update score display with current values
         updateScore(0, true);
